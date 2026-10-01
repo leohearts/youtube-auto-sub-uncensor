@@ -76,7 +76,9 @@
   const DEFAULTS = {
     enabled: true,
     asr: true,
-    autoCaptions: true,
+    // Off by default: the script has no business pressing the player's buttons
+    // uninvited.
+    autoCaptions: false,
     modelEn: 'Xenova/whisper-tiny.en',
     modelOther: 'Xenova/whisper-tiny',
   };
