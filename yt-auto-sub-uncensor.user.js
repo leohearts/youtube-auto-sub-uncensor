@@ -1547,15 +1547,6 @@
       };
       return res;
     },
-
-    // Last resort when the transcript cannot be lined up with the caption's words:
-    // take the word whose onset sits nearest the censored word's start.
-    run: async function (audio, targetFromSec, targetToSec) {
-      const res = await this.transcribe(audio);
-      const chunks = res && res.chunks;
-      if (!Array.isArray(chunks) || !chunks.length) return null;
-      return pickByOnset(chunks, audio, targetFromSec, targetToSec);
-    },
   };
 
   // The word whose onset sits nearest where the censored word starts. Used when the
