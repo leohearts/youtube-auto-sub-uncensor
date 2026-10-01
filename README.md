@@ -27,7 +27,25 @@ Michael Reeves video that is a lot of freezing.
 - The model is tiny. It hears `[ __ ]` and writes `[ __ ]`. Usually.
 - Non-English videos pull a second model. Another 40 MB. Sorry.
 - `[ __ ]` whose audio never reached the player's buffer stays `[ __ ]`.
-- Firefox is untested. It is probably fine. Probably.
+
+## Modes
+
+It degrades instead of dying. In order:
+
+| Mode | What it means |
+|---|---|
+| **worker** | Whisper on its own thread. Nothing on screen stutters. |
+| **main thread** | No `GM_addElement`, so the model runs on the page thread. The page freezes for about a second per `[ __ ]`. |
+| **guess only** | No model, no audio, or you turned it off. Grammar and timing guess at the word. Often right. Not always right. |
+
+The pill in the corner says which one you are getting. Hover it for the reason.
+
+## Firefox
+
+Used daily, on Firefox, by a human. That is more testing than the rest of this
+file can claim. Everything else was verified by a scripted Chromium driving a real
+Tampermonkey — thorough about the things it thought to measure, and blind to the
+things it did not. A human just watches the video.
 
 ## Notes
 

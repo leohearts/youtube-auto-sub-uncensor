@@ -2290,6 +2290,7 @@
     parseTrack: parseTrack, analyze: analyze, maybePrewarm: maybePrewarm,
     archive: archive, alignCue: alignCue, applyCueWords: applyCueWords, runCue: runCue,
     nextArchiveCue: nextArchiveCue, workerHost: workerHost,
+    fixText: fixText, findCueForText: findCueForText, findCueAtTime: findCueAtTime,
   };
 
   document.addEventListener('yt-navigate-finish', function () {

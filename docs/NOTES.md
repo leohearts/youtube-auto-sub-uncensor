@@ -162,13 +162,19 @@ symptom rarely points at the cause.
 
 ## 6. Not verified
 
-- **Firefox.** Everything above was measured on Chromium. `GM_addElement` and the
-  `data:` iframe behave the same way in principle, but that is an assumption.
-- **Live video and the worker in the same browser.** Each half was verified in a
-  different browser: the archive and alignment where YouTube video plays, the worker
-  under a real Tampermonkey. The combination was not.
+- **The combination.** Live video and the worker in the same browser. Each half was
+  measured in a different browser: the archive and alignment where YouTube video
+  plays, the worker under a real Tampermonkey. Never together.
+- **Firefox, by measurement.** Every number above is from Chromium. Firefox is used
+  daily by a human, which catches "it is broken" and misses "it is 300 ms slower
+  than it should be".
 - **`fmt=mp4a`.** Firefox may receive AAC in fMP4 rather than WebM/Opus.
   `decodeAudioData` on a fragmented MP4 slice was never tested.
+
+The honest split: scripted verification is thorough about what it thought to
+measure and blind to what it did not. A person watching a video is the opposite.
+Both were needed here, and the interesting bugs were found by whichever one was
+looking at the time.
 
 ## 7. Cost
 
