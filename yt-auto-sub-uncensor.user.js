@@ -2040,9 +2040,11 @@
     return video ? timeLabel(video.currentTime) : '?';
   }
 
-  function debugLog(cueIdx, before, after) {
+  function debugLog(cueIdx, before, after, where) {
     if (!config.debug) return;
-    const key = cueIdx + '|' + after;
+    // Keyed by surface as well: the caption and the transcript panel both rewrite the
+    // same cue, and sharing a key let whichever ran first swallow the other's line.
+    const key = where + '|' + cueIdx + '|' + after;
     if (debugLogged.has(key)) return;
     debugLogged.add(key);
 
@@ -2057,12 +2059,13 @@
       });
     }
     console.log(
-      '%c uncensor %c cue ' + (cue ? timeLabel(cue.startMs / 1000) : '?') +
+      '%c uncensor %c ' + where + ' %c cue ' + (cue ? timeLabel(cue.startMs / 1000) : '?') +
         ' %c at ' + playheadLabel() + ' %c' +
         before.replace(WS_G, ' ').trim() + '%c  →  %c' + after.replace(WS_G, ' ').trim() +
         '%c  ' + filled.join(' + '),
       'background:#b00;color:#fff;border-radius:3px;font-weight:bold',
       'color:#888',
+      'color:#a6a',
       'color:#0aa',
       'color:#e88',
       'color:#666',
@@ -2164,7 +2167,7 @@
         if (again && again !== text) {
           el.textContent = again;
           st.written = again;
-          debugLog(st.cueIdx, st.raw, again);
+          debugLog(st.cueIdx, st.raw, again, 'caption');
         }
         continue;
       }
@@ -2177,7 +2180,7 @@
       if (fixed && fixed !== text) {
         el.textContent = fixed;
         elState.set(el, { raw: text, cueIdx: cueIdx, written: fixed });
-        debugLog(cueIdx, text, fixed);
+        debugLog(cueIdx, text, fixed, 'caption');
       }
     }
   }
@@ -2207,7 +2210,7 @@
       const fixed = fixText(text, cueIdx);
       if (fixed && fixed !== text) {
         textEl.textContent = fixed;
-        debugLog(cueIdx, text, fixed);
+        debugLog(cueIdx, text, fixed, 'panel');
       }
     }
   }
