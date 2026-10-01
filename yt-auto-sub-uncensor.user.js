@@ -562,7 +562,6 @@
     synced: false,        // an EBML header has been seen, so the buffer is a real stream
     full: false,          // the raw buffer hit its cap and stopped growing
     mime: null,           // the audio SourceBuffer's type, for diagnostics
-    bytes: 0,
 
     reset: function () {
       this.buf = null;
@@ -577,7 +576,6 @@
       this.error = null;
       this.synced = false;
       this.full = false;
-      this.bytes = 0;
     },
 
     active: function () {
@@ -612,7 +610,6 @@
       // nothing left to serve, so stop growing the copy.
       if (state.cues.length && !hasPendingJobs()) return;
       this.synced = true;
-      this.bytes += bytes.length;
       if (this.full) return;
       if (this.len + bytes.length > ARCHIVE_MAX_BYTES) {
         this.full = true;
