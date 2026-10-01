@@ -1588,31 +1588,50 @@
   function alignCue(cue, chunks) {
     const seq = cue.seq;
     if (!seq || !seq.length || !chunks.length) return null;
-    const known = [];
-    seq.forEach(function (item, i) {
-      if (!item.gap && item.word) known.push({ seqIndex: i, word: item.word });
-    });
-    if (!known.length) return null;
-
     const said = chunks.map(function (c) { return stripWord(c.text); });
+
+    // Only the items a transcript can carry. A gap stands for one word, so it takes
+    // one chunk; the caption's punctuation and bare numbers are dropped, because
+    // Whisper never emits them and counting them would shift every position after
+    // them by one.
+    const items = [];
+    const seqToItem = [];
+    seq.forEach(function (item, seqIndex) {
+      if (!item.gap && !item.word) { seqToItem[seqIndex] = -1; return; }
+      seqToItem[seqIndex] = items.length;
+      items.push({ word: item.gap ? null : item.word });
+    });
+    if (!items.length) return null;
+
+    // Score an offset by how many of the cue's own words the transcript agrees with
+    // there. Scoring a run of consecutive words does not work: with the gaps taken out
+    // the two words either side of a gap look adjacent, so the word after the anchor
+    // was compared against the word after the gap and never matched. A cue with one
+    // word either side of its gap could not score above 1, which sent it to the
+    // time-based fallback every time.
     let best = null;
-    for (let j = 0; j < said.length; j++) {
-      if (!said[j]) continue;
-      for (let k = 0; k < known.length; k++) {
-        if (said[j] !== known[k].word) continue;
-        let back = 0;
-        while (j - back - 1 >= 0 && k - back - 1 >= 0 &&
-               said[j - back - 1] && said[j - back - 1] === known[k - back - 1].word) back++;
-        let fwd = 0;
-        while (j + fwd + 1 < said.length && k + fwd + 1 < known.length &&
-               said[j + fwd + 1] && said[j + fwd + 1] === known[k + fwd + 1].word) fwd++;
-        const score = back + fwd + 1;
-        if (!best || score > best.score) {
-          best = { score: score, chunkIndex: j, seqIndex: known[k].seqIndex };
-        }
+    for (let d = 1 - items.length; d < said.length; d++) {
+      let matched = 0;
+      for (let i = 0; i < items.length; i++) {
+        const j = i + d;
+        if (j < 0 || j >= said.length) continue;
+        if (!items[i].word) continue; // a gap matches any word, so it proves nothing
+        if (said[j] === items[i].word) matched++;
       }
+      if (matched && (!best || matched > best.score)) best = { score: matched, offset: d };
     }
+    if (!best) return null;
+    best.said = said;
+    best.seqToItem = seqToItem;
     return best;
+  }
+
+  // The transcript chunk that lines up with one position in the cue's word sequence.
+  function chunkForSeq(alignment, seqIndex, chunks) {
+    const item = alignment.seqToItem[seqIndex];
+    if (item === undefined || item < 0) return -1;
+    const c = alignment.offset + item;
+    return (c >= 0 && c < chunks.length) ? c : -1;
   }
 
   // Fill in every censored word of one cue from a single transcript.
@@ -1623,10 +1642,8 @@
     for (const job of jobs) {
       let word = null;
       if (alignment && alignment.score >= 2) {
-        const chunkIndex = alignment.chunkIndex + (job.seqIndex - alignment.seqIndex);
-        if (chunkIndex >= 0 && chunkIndex < chunks.length) {
-          word = cleanWord(chunks[chunkIndex].text);
-        }
+        const chunkIndex = chunkForSeq(alignment, job.seqIndex, chunks);
+        if (chunkIndex >= 0) word = cleanWord(chunks[chunkIndex].text);
       }
       if (!word) word = pickByOnset(chunks, audio, job.targetFrom, job.targetTo);
       if (word) {
