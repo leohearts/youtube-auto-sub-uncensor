@@ -1969,33 +1969,37 @@
   }
 
   let domObserver = null;
+  let domTarget = null;
   let pillObserver = null;
+  let pillTarget = null;
   let applying = false;
 
   function installObservers() {
-    if (!domObserver) {
-      const target = document.querySelector('.ytp-caption-window-container')
-        || document.querySelector('ytd-transcript-segment-list-renderer')
-        || document.querySelector('.html5-video-player');
-      if (target) {
-        // YouTube rewrites the caption text on every word update, so patching only on a
-        // timer leaves the raw placeholder visible for a frame. React to the mutation.
-        domObserver = new MutationObserver(function () { applyToDom(); });
-        domObserver.observe(target, { childList: true, subtree: true, characterData: true });
-      }
+    // Both observers are re-attached whenever their target changes. An observer left on
+    // an element the player has replaced goes quiet for the rest of the session, which
+    // shows up as the pill never hiding again or the raw placeholder flickering back.
+    const captionTarget = document.querySelector('.ytp-caption-window-container')
+      || document.querySelector('ytd-transcript-segment-list-renderer')
+      || document.querySelector('.html5-video-player');
+    if (captionTarget && captionTarget !== domTarget) {
+      // YouTube rewrites the caption text on every word update, so patching only on a
+      // timer leaves the raw placeholder visible for a frame. React to the mutation.
+      if (domObserver) domObserver.disconnect();
+      domObserver = new MutationObserver(function () { applyToDom(); });
+      domObserver.observe(captionTarget, { childList: true, subtree: true, characterData: true });
+      domTarget = captionTarget;
     }
 
-    if (!pillObserver) {
-      const player = document.querySelector('.html5-video-player');
-      if (player) {
-        // Whether captions are on decides whether the pill is shown at all, and the
-        // button is not the only way that changes - the settings menu and the `c`
-        // shortcut do it too, so watching for clicks would miss them. Watching the
-        // attribute on the player instead of on the button also survives the player
-        // rebuilding its control bar.
-        pillObserver = new MutationObserver(function () { updatePill(); });
-        pillObserver.observe(player, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
-      }
+    const player = document.querySelector('.html5-video-player');
+    if (player && player !== pillTarget) {
+      // Whether captions are on decides whether the pill is shown at all, and the button
+      // is not the only way that changes - the settings menu and the `c` shortcut do it
+      // too, so watching for clicks would miss them. Watching the attribute on the
+      // player rather than on the button also survives the control bar being rebuilt.
+      if (pillObserver) pillObserver.disconnect();
+      pillObserver = new MutationObserver(function () { updatePill(); });
+      pillObserver.observe(player, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
+      pillTarget = player;
     }
   }
 
