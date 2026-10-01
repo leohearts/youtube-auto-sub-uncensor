@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         YouTube Auto-Sub Uncensor
-// @namespace    https://github.com/omp/youtube-auto-sub-uncensor
+// @namespace    https://github.com/leohearts/youtube-auto-sub-uncensor
 // @version      1.0.0
 // @description  YouTube censors profanity in auto-generated captions server-side, replacing the word with "[ __ ]". This recovers the real word from the video's own audio with a local Whisper model running in a worker thread, and shows a grammar/timing guess until the transcript is ready.
-// @author       omp
+// @author       leohearts
 // @match        https://www.youtube.com/*
 // @run-at       document-start
 // @grant        GM_getValue
