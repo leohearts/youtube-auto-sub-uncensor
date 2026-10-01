@@ -2306,6 +2306,7 @@
     asr: asr, setCorrection: setCorrection, pumpQueue: pumpQueue, updatePill: updatePill,
     parseTrack: parseTrack, analyze: analyze, maybePrewarm: maybePrewarm,
     archive: archive, alignCue: alignCue, applyCueWords: applyCueWords, runCue: runCue,
+    runJob: runJob, pickByOnset: pickByOnset,
     nextArchiveCue: nextArchiveCue, workerHost: workerHost,
     fixText: fixText, findCueForText: findCueForText, findCueAtTime: findCueAtTime,
   };
