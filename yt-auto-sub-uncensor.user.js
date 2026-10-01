@@ -144,6 +144,7 @@
     normIndex: null,    // normalized cue text -> cue index, for O(1) DOM lookups
     corrections: null,  // Map<cueIndex, Map<segIndex, {word, source}>>
     asrWords: new Map(), // stable key -> word recovered by Whisper
+    asrSettled: new Set(), // keys whose audio has already been through inference
     asrReady: false,
     asrLoading: false,
     asrWarming: false,
@@ -169,6 +170,7 @@
     state.normIndex = null;
     state.corrections = new Map();
     state.asrWords = new Map();
+    state.asrSettled = new Set();
     state.queue = [];
     state.pumping = false;
     if (state.pumpTimer) { clearTimeout(state.pumpTimer); state.pumpTimer = null; }
@@ -465,7 +467,12 @@
           // tail in the audio, while readiness only waits for the estimated end.
           sliceFrom: (cue.startMs + seg.startOffset) / 1000 - 4,
           sliceTo: (cue.startMs + Math.min(seg.rawEndOffset, seg.endOffset + 2500)) / 1000 + 0.5,
-          done: state.asrWords.has(wordKey(cue, seg)),
+          // Whisper ran on this audio and answered nothing usable, or the window was
+          // silent: either way a second pass reaches the same answer, so it stays
+          // settled across a re-parse. Re-parsing happens whenever the player
+          // re-requests the track - every time captions are switched on - and without
+          // this every word that produced no word back is transcribed again.
+          done: state.asrWords.has(wordKey(cue, seg)) || state.asrSettled.has(wordKey(cue, seg)),
           tries: 0,
           audioMisses: 0,
         });
@@ -1715,7 +1722,7 @@
         where: 'skipped', reason: 'silent window', peak: +peak.toFixed(5),
         secs: +(audio.pcm.length / 16000).toFixed(2), audioStart: +audio.startSec.toFixed(2),
       };
-      for (const job of jobs) job.done = true;
+      for (const job of jobs) { job.done = true; state.asrSettled.add(job.key); }
       return false;
     }
 
@@ -1728,7 +1735,7 @@
       // audio is fixed, so a second pass would reach the same answer.
       apply(res && res.chunks);
       state.asrLastError = null;
-      for (const job of jobs) job.done = true;
+      for (const job of jobs) { job.done = true; state.asrSettled.add(job.key); }
     } catch (e) {
       for (const job of jobs) {
         job.tries++;
