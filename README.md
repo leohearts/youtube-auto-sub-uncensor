@@ -13,7 +13,7 @@ Until then you get a guess. The guess is a guess.
 ## Install
 
 1. Tampermonkey or Violentmonkey.
-2. Open [`yt-auto-sub-uncensor.user.js`](yt-auto-sub-uncensor.user.js).
+2. Open [`yt-auto-sub-uncensor.user.js`](yt-auto-sub-uncensor.user.js). Click `raw` if any.
 3. Install.
 
 First run pulls ~40 MB of model. It's the smallest one that exists.
