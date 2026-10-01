@@ -1926,21 +1926,43 @@
     return all.length ? all[0] : null;
   }
 
-  function findCueForText(domText) {
+  // Whether a cue could be the one on screen at this instant. A caption is up for its
+  // own duration; the margin covers the drift between the caption's timings and the
+  // player's clock.
+  function cueIsOnScreen(cue, nowMs) {
+    return nowMs >= cue.startMs - 1500 &&
+           nowMs <= cue.startMs + Math.max(cue.durMs, 1500) + 1500;
+  }
+
+  function findCueForText(domText, nowMs) {
     const norm = normalize(domText);
     if (!norm) return null;
     if (state.normIndex) {
       const exact = state.normIndex.get(norm);
-      if (exact !== undefined) return exact;
+      // The index keeps one cue per text, so a phrase that the video repeats always
+      // resolves to its first occurrence. If that one is nowhere near the playhead,
+      // this is the other occurrence.
+      if (exact !== undefined && (nowMs === undefined || cueIsOnScreen(state.cues[exact], nowMs))) {
+        return exact;
+      }
     }
-    // Not a whole cue: YouTube renders captions word by word, so this is usually a
-    // fragment, and the fragment has to be located inside a cue.
+    // Not a whole cue, or not the one on screen. YouTube renders captions word by
+    // word, so this is usually a fragment, and a fragment matches every cue that
+    // contains it: "Holy [ __ ]" is a whole cue in one place and the tail of a longer
+    // one minutes later, and taking the first in document order put a word from the
+    // wrong cue on screen until the rest of the sentence rendered. The playhead is
+    // what tells them apart.
+    let best = null;
     for (let i = 0; i < state.cues.length; i++) {
       const cue = state.cues[i];
       if (!cue.norm) continue;
-      if (norm.indexOf(cue.norm) !== -1 || cue.norm.indexOf(norm) !== -1) return i;
+      if (norm.indexOf(cue.norm) === -1 && cue.norm.indexOf(norm) === -1) continue;
+      if (nowMs === undefined) return i;
+      if (!cueIsOnScreen(cue, nowMs)) continue;
+      const d = Math.abs(cue.startMs - nowMs);
+      if (!best || d < best.d) best = { i: i, d: d };
     }
-    return null;
+    return best ? best.i : null;
   }
 
   function findCueAtTime(ms) {
@@ -2148,7 +2170,7 @@
       }
 
       if (!PLACEHOLDER.test(text)) continue;
-      let cueIdx = findCueForText(text);
+      let cueIdx = findCueForText(text, nowMs);
       if (cueIdx === null || cueIdx < 0) cueIdx = findCueAtTime(nowMs);
       if (cueIdx < 0) continue;
       const fixed = fixText(text, cueIdx);
@@ -2170,15 +2192,17 @@
       if (!text || !PLACEHOLDER.test(text)) continue;
       const tsEl = row.querySelector('.segment-timestamp');
       let cueIdx = -1;
+      let rowMs;
       if (tsEl) {
         const parts = tsEl.textContent.trim().split(':').map(Number);
         if (parts.length && parts.every(function (n) { return !isNaN(n); })) {
           let secs = 0;
           for (const p of parts) secs = secs * 60 + p;
-          cueIdx = findCueAtTime(secs * 1000);
+          rowMs = secs * 1000;
+          cueIdx = findCueAtTime(rowMs);
         }
       }
-      if (cueIdx < 0) cueIdx = findCueForText(text);
+      if (cueIdx < 0) cueIdx = findCueForText(text, rowMs);
       if (cueIdx === null || cueIdx < 0) continue;
       const fixed = fixText(text, cueIdx);
       if (fixed && fixed !== text) {
