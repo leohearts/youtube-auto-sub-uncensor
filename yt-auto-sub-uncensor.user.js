@@ -101,6 +101,20 @@
 
   let config = store.read();
 
+  // Sampled peak, which is all that is needed to tell a silent window from a quiet one.
+  function peakOf(pcm) {
+    let peak = 0;
+    for (let i = 0; i < pcm.length; i += 11) {
+      const a = Math.abs(pcm[i]);
+      if (a > peak) peak = a;
+    }
+    return peak;
+  }
+
+  // Below this there is nothing to transcribe; Whisper would only answer
+  // "[BLANK_AUDIO]". -48 dBFS, which is quiet enough to call silence.
+  const SILENCE_PEAK = 0.004;
+
   // Box-filtered decimation to the 16 kHz mono that Whisper expects. Both audio paths
   // need it, so it lives in one place.
   function to16k(src, rate) {
@@ -1521,17 +1535,12 @@
       // transcript. The English model is already language-locked, and the
       // multilingual fallback auto-detects.
       const res = await pipe(audio.pcm, { return_timestamps: 'word' });
-      let peak = 0;
-      for (let i = 0; i < audio.pcm.length; i += 13) {
-        const a = Math.abs(audio.pcm[i]);
-        if (a > peak) peak = a;
-      }
       state.lastAsr = {
         where: 'main',
         text: (res && res.text || '').slice(0, 200),
         chunks: (res && res.chunks) ? res.chunks.length : null,
         secs: +(audio.pcm.length / 16000).toFixed(2),
-        peak: +peak.toFixed(3),
+        peak: +peakOf(audio.pcm).toFixed(3),
         pieces: audio.pieces,
         audioStart: +audio.startSec.toFixed(2),
         audioEnd: (audio.endSec === undefined) ? null : +audio.endSec.toFixed(2),
@@ -1706,14 +1715,8 @@
       }
       return false;
     }
-    let peak = 0;
-    for (let i = 0; i < audio.pcm.length; i += 11) {
-      const a = Math.abs(audio.pcm[i]);
-      if (a > peak) peak = a;
-    }
-    if (peak < 0.004) {
-      // Nothing audible in the window. Whisper would only answer "[BLANK_AUDIO]",
-      // so skip the inference and the main-thread hitch it costs.
+    if (peakOf(audio.pcm) < SILENCE_PEAK) {
+      // Nothing audible in the window, so skip the inference and the hitch it costs.
       for (const job of jobs) job.done = true;
       return false;
     }
