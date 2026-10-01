@@ -81,6 +81,7 @@
     autoCaptions: false,
     modelEn: 'Xenova/whisper-tiny.en',
     modelOther: 'Xenova/whisper-tiny',
+    debug: false,
   };
 
   /* ------------------------------------------------------------------ *
@@ -177,6 +178,7 @@
     state.pumpGate = null;
     state.captionAttempt = 0;
     state.captionRetries = 0;
+    debugLogged.clear();
     tap.reset();
     // The archive is deliberately not reset here: it belongs to the media pipeline and
     // starts over when a new audio SourceBuffer is created.
@@ -1974,6 +1976,46 @@
   let pillTarget = null;
   let applying = false;
 
+  // Debug mode: one console line per caption actually rewritten, deduplicated so that
+  // YouTube re-rendering the same words does not repeat it. The key includes the result
+  // text, so a guess being replaced by an ASR answer logs a second time.
+  const debugLogged = new Set();
+
+  function timeLabel(sec) {
+    const m = Math.floor(sec / 60);
+    const s = sec - m * 60;
+    return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2);
+  }
+
+  function debugLog(cueIdx, before, after) {
+    if (!config.debug) return;
+    const key = cueIdx + '|' + after;
+    if (debugLogged.has(key)) return;
+    debugLogged.add(key);
+
+    const cue = state.cues[cueIdx];
+    const map = state.corrections.get(cueIdx);
+    const filled = [];
+    if (cue && map) {
+      cue.segs.forEach(function (seg, segIdx) {
+        if (!seg.placeholder) return;
+        const entry = map.get(segIdx);
+        filled.push(entry ? entry.word + ' [' + entry.source + ']' : '?');
+      });
+    }
+    console.log(
+      '%c uncensor %c ' + (cue ? timeLabel(cue.startMs / 1000) : '?') + ' %c' +
+        before.replace(WS_G, ' ').trim() + '%c  →  %c' + after.replace(WS_G, ' ').trim() +
+        '%c  ' + filled.join(' + '),
+      'background:#b00;color:#fff;border-radius:3px;font-weight:bold',
+      'color:#888',
+      'color:#e88',
+      'color:#666',
+      'color:#7c7',
+      'color:#8af;font-style:italic'
+    );
+  }
+
   function installObservers() {
     // Both observers are re-attached whenever their target changes. An observer left on
     // an element the player has replaced goes quiet for the rest of the session, which
@@ -2034,6 +2076,7 @@
         if (again && again !== text) {
           el.textContent = again;
           st.written = again;
+          debugLog(st.cueIdx, st.raw, again);
         }
         continue;
       }
@@ -2046,6 +2089,7 @@
       if (fixed && fixed !== text) {
         el.textContent = fixed;
         elState.set(el, { raw: text, cueIdx: cueIdx, written: fixed });
+        debugLog(cueIdx, text, fixed);
       }
     }
   }
@@ -2071,7 +2115,10 @@
       if (cueIdx < 0) cueIdx = findCueForText(text);
       if (cueIdx === null || cueIdx < 0) continue;
       const fixed = fixText(text, cueIdx);
-      if (fixed && fixed !== text) textEl.textContent = fixed;
+      if (fixed && fixed !== text) {
+        textEl.textContent = fixed;
+        debugLog(cueIdx, text, fixed);
+      }
     }
   }
 
@@ -2364,6 +2411,15 @@
         const btn = document.querySelector('.ytp-subtitles-button');
         if (btn && btn.getAttribute('aria-pressed') === 'true') btn.click();
       }
+      refreshMenu();
+    });
+
+    add((config.debug ? '✓ ' : '✗ ') + 'Log every caption we rewrite', function () {
+      config.debug = !config.debug;
+      store.write(config);
+      // Re-enabled means the log should start over, not stay silent about cues it
+      // already printed while the setting was last on.
+      if (config.debug) debugLogged.clear();
       refreshMenu();
     });
   }
