@@ -1771,9 +1771,11 @@
       job.done = true;
       if (word) setCorrection(job.cueIdx, job.segIdx, word, 'asr');
     } catch (e) {
-      // A pipeline failure is worth one retry; the guess stays until then.
+      // A transcription error is not a load failure: state.asrError means "the model
+      // never loaded" and makes ensure() refuse to ever try again, so one transient
+      // error on this path disabled ASR for the rest of the video.
       job.tries++;
-      state.asrError = String(e && e.message ? e.message : e);
+      state.asrLastError = String(e && e.message ? e.message : e);
       if (job.tries >= 2) job.done = true;
     } finally {
       state.busy = false;
