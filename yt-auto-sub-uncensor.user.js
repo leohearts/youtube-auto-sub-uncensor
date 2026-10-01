@@ -1694,9 +1694,13 @@
     return null;
   }
 
-  async function runCue(group, audio) {
+  // Both paths need the same bookkeeping around one transcription: mark the jobs done
+  // whatever the answer comes back as, retry a pipeline failure a few times, keep the
+  // error away from state.asrError - that one means "the model never loaded" and makes
+  // ensure() refuse to ever try again - and hold the pill's busy state for the duration.
+  async function transcribeJobs(jobs, audio, apply) {
     if (!audio) {
-      for (const job of group.jobs) {
+      for (const job of jobs) {
         job.audioMisses++;
         if (job.audioMisses >= 4) job.done = true;
       }
@@ -1710,7 +1714,7 @@
     if (peak < 0.004) {
       // Nothing audible in the window. Whisper would only answer "[BLANK_AUDIO]",
       // so skip the inference and the main-thread hitch it costs.
-      for (const job of group.jobs) job.done = true;
+      for (const job of jobs) job.done = true;
       return false;
     }
 
@@ -1718,22 +1722,17 @@
     state.busy = true;
     updatePill();
     try {
-      const cue = state.cues[group.cueIdx];
       const res = await asr.transcribe(audio);
-      const chunks = res && res.chunks;
-      // One pass for the whole cue. Whether or not a word came back, do not run these
-      // again: the audio is fixed, so a second pass would reach the same answer.
-      applyCueWords(cue, group.jobs, chunks, audio);
+      // Ran cleanly. Whether or not a word came back, do not run these again: the
+      // audio is fixed, so a second pass would reach the same answer.
+      apply(res && res.chunks);
       state.asrLastError = null;
-      for (const job of group.jobs) job.done = true;
+      for (const job of jobs) job.done = true;
     } catch (e) {
-      for (const job of group.jobs) {
+      for (const job of jobs) {
         job.tries++;
         if (job.tries >= 3) job.done = true;
       }
-      // A transcription error is not a load failure: state.asrError would make
-      // ensure() refuse to ever try again, so one bad cue would disable ASR for the
-      // rest of the video.
       state.asrLastError = String(e && e.message ? e.message : e);
     } finally {
       state.busy = false;
@@ -1743,46 +1742,21 @@
     return true;
   }
 
-  async function runJob(job, audio) {
-    if (!audio) {
-      job.audioMisses++;
-      if (job.audioMisses >= 4) job.done = true;
-      return false;
-    }
-    let peak = 0;
-    for (let i = 0; i < audio.pcm.length; i += 11) {
-      const a = Math.abs(audio.pcm[i]);
-      if (a > peak) peak = a;
-    }
-    if (peak < 0.004) {
-      // Nothing audible in the window. Whisper would only answer "[BLANK_AUDIO]",
-      // so skip the inference and the main-thread hitch it costs.
-      job.done = true;
-      return false;
-    }
+  // One transcription answers every censored word in the cue.
+  async function runCue(group, audio) {
+    const cue = state.cues[group.cueIdx];
+    return transcribeJobs(group.jobs, audio, function (chunks) {
+      applyCueWords(cue, group.jobs, chunks, audio);
+    });
+  }
 
-    state.pumping = true;
-    state.busy = true;
-    updatePill();
-    try {
-      const word = await asr.run(audio, job.targetFrom, job.targetTo);
-      // Ran cleanly. Whether or not a word came back, do not run this cue again:
-      // the audio is fixed, so a second pass would reach the same answer.
-      job.done = true;
+  // The fallback path, which has one word per window.
+  async function runJob(job, audio) {
+    return transcribeJobs([job], audio, function (chunks) {
+      if (!Array.isArray(chunks) || !chunks.length) return;
+      const word = pickByOnset(chunks, audio, job.targetFrom, job.targetTo);
       if (word) setCorrection(job.cueIdx, job.segIdx, word, 'asr');
-    } catch (e) {
-      // A transcription error is not a load failure: state.asrError means "the model
-      // never loaded" and makes ensure() refuse to ever try again, so one transient
-      // error on this path disabled ASR for the rest of the video.
-      job.tries++;
-      state.asrLastError = String(e && e.message ? e.message : e);
-      if (job.tries >= 2) job.done = true;
-    } finally {
-      state.busy = false;
-      state.pumping = false;
-      updatePill();
-    }
-    return true;
+    });
   }
 
   // The next word still ahead of the buffer, and how far ahead it is.
