@@ -2225,9 +2225,20 @@
       player.appendChild(pill);
     }
     const pill = state.pill;
+
+    // Hide only when captions are known to be off. A missing button or a missing
+    // attribute means the state could not be read, and hiding on a failed read looks
+    // exactly like a script that is not running at all.
+    const cc = document.querySelector('.ytp-subtitles-button');
+    const ccState = cc ? cc.getAttribute('aria-pressed') : null;
+    pill.classList.toggle('ytasu-hidden', ccState === 'false');
+
     let text;
     let detail = '';
     if (!config.enabled) text = 'Uncensor: off';
+    // Normally unreachable, since the pill is hidden in this state. Kept because it is
+    // the only thing that would explain the pill if the hiding ever stopped working.
+    else if (ccState === 'false') text = 'Uncensor: captions are off';
     else if (!state.cues.length) {
       // A parse failure leaves no cues at all, which is otherwise indistinguishable
       // from captions simply not having arrived yet.
@@ -2262,6 +2273,7 @@
       '.ytasu-pill:hover{opacity:1}',
       '.ytasu-pill.ytasu-off{color:#999}',
       '.ytasu-pill.ytasu-error{color:#ff9a9a}',
+      '.ytasu-pill.ytasu-hidden{display:none}',
       '.html5-video-player.ytp-autohide .ytasu-pill{opacity:0;pointer-events:none}',
     ].join('');
     (document.head || document.documentElement).appendChild(style);
