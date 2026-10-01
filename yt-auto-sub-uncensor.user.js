@@ -1649,6 +1649,8 @@
       if (word) {
         setCorrection(job.cueIdx, job.segIdx, word, 'asr');
         filled++;
+      } else {
+        debugMiss(job.cueIdx, job.segIdx, cue, chunks, audio, alignment);
       }
     }
     return filled;
@@ -2011,6 +2013,11 @@
     return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2);
   }
 
+  function playheadLabel() {
+    const video = tap.attached || getVideo();
+    return video ? timeLabel(video.currentTime) : '?';
+  }
+
   function debugLog(cueIdx, before, after) {
     if (!config.debug) return;
     const key = cueIdx + '|' + after;
@@ -2028,14 +2035,49 @@
       });
     }
     console.log(
-      '%c uncensor %c ' + (cue ? timeLabel(cue.startMs / 1000) : '?') + ' %c' +
+      '%c uncensor %c cue ' + (cue ? timeLabel(cue.startMs / 1000) : '?') +
+        ' %c at ' + playheadLabel() + ' %c' +
         before.replace(WS_G, ' ').trim() + '%c  →  %c' + after.replace(WS_G, ' ').trim() +
         '%c  ' + filled.join(' + '),
       'background:#b00;color:#fff;border-radius:3px;font-weight:bold',
       'color:#888',
+      'color:#0aa',
       'color:#e88',
       'color:#666',
       'color:#7c7',
+      'color:#8af;font-style:italic'
+    );
+  }
+
+  // The other half of the picture: a window was transcribed and this word still kept
+  // its guess, so the answer is somewhere in the transcript and did not reach the
+  // caption. Prints why each path refused it, which is the whole point of the mode.
+  function debugMiss(cueIdx, segIdx, cue, chunks, audio, alignment) {
+    if (!config.debug) return;
+    const key = 'miss|' + cueIdx + '|' + segIdx;
+    if (debugLogged.has(key)) return;
+    debugLogged.add(key);
+
+    const seg = cue.segs[segIdx];
+    const onset = (cue.startMs + seg.startOffset) / 1000 - audio.startSec;
+    let nearest = null;
+    for (const c of chunks) {
+      if (!c.timestamp || c.timestamp[0] === null) continue;
+      const d = Math.abs(c.timestamp[0] - onset);
+      if (!nearest || d < nearest.d) nearest = { d: d, text: c.text };
+    }
+    console.log(
+      '%c uncensor %c cue ' + timeLabel(cue.startMs / 1000) + ' %c at ' + playheadLabel() +
+        ' %cNOT filled %c' + (seg.context ? (seg.context.prev1 + ' [ ] ' + seg.context.next1) : '') +
+        '%c  align ' + (alignment ? alignment.score : 'none') +
+        ', nearest transcript word ' +
+        (nearest ? nearest.d.toFixed(2) + 's "' + String(nearest.text).trim() + '"' : 'none') +
+        '%c  ' + chunks.map(function (c) { return c.text; }).join('').trim().slice(0, 200),
+      'background:#b00;color:#fff;border-radius:3px;font-weight:bold',
+      'color:#888',
+      'color:#0aa',
+      'color:#e88',
+      'color:#ff0',
       'color:#8af;font-style:italic'
     );
   }
