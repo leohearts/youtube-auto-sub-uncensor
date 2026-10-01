@@ -1994,18 +1994,34 @@
   }
 
   let domObserver = null;
+  let pillObserver = null;
   let applying = false;
 
-  function installCaptionObserver() {
-    if (domObserver) return;
-    const target = document.querySelector('.ytp-caption-window-container')
-      || document.querySelector('ytd-transcript-segment-list-renderer')
-      || document.querySelector('.html5-video-player');
-    if (!target) return;
-    // YouTube rewrites the caption text on every word update, so patching only on a
-    // timer leaves the raw placeholder visible for a frame. React to the mutation.
-    domObserver = new MutationObserver(function () { applyToDom(); });
-    domObserver.observe(target, { childList: true, subtree: true, characterData: true });
+  function installObservers() {
+    if (!domObserver) {
+      const target = document.querySelector('.ytp-caption-window-container')
+        || document.querySelector('ytd-transcript-segment-list-renderer')
+        || document.querySelector('.html5-video-player');
+      if (target) {
+        // YouTube rewrites the caption text on every word update, so patching only on a
+        // timer leaves the raw placeholder visible for a frame. React to the mutation.
+        domObserver = new MutationObserver(function () { applyToDom(); });
+        domObserver.observe(target, { childList: true, subtree: true, characterData: true });
+      }
+    }
+
+    if (!pillObserver) {
+      const player = document.querySelector('.html5-video-player');
+      if (player) {
+        // Whether captions are on decides whether the pill is shown at all, and the
+        // button is not the only way that changes - the settings menu and the `c`
+        // shortcut do it too, so watching for clicks would miss them. Watching the
+        // attribute on the player instead of on the button also survives the player
+        // rebuilding its control bar.
+        pillObserver = new MutationObserver(function () { updatePill(); });
+        pillObserver.observe(player, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
+      }
+    }
   }
 
   function applyToDom() {
@@ -2127,6 +2143,10 @@
     const video = getVideo();
     if (!video) return;
 
+    // Before the cue gate below: the pill's visibility follows the caption button, and
+    // that has to work even when there is nothing to transcribe yet.
+    installObservers();
+
     const videoId = currentVideoId();
     if (videoId && videoId !== state.videoId) resetVideoState(videoId);
 
@@ -2156,7 +2176,6 @@
       }
     }
 
-    installCaptionObserver();
     applyToDom();
     if (hasPendingJobs()) {
       // Prewarming is independent of audio capture: the model download should be
