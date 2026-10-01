@@ -2226,6 +2226,15 @@
     }
     const pill = state.pill;
 
+    // Sit clear of the control bar. Its height is not a constant - it follows the
+    // player size and the layout - so it is measured rather than guessed at, with the
+    // stylesheet's value as the fallback when the bar is not there to measure.
+    const chrome = player.querySelector('.ytp-chrome-bottom');
+    if (chrome) {
+      const h = chrome.getBoundingClientRect().height;
+      if (h > 0) pill.style.bottom = Math.round(h + 10) + 'px';
+    }
+
     // Hide only when captions are known to be off. A missing button or a missing
     // attribute means the state could not be read, and hiding on a failed read looks
     // exactly like a script that is not running at all.
