@@ -1703,8 +1703,16 @@
       }
       return false;
     }
-    if (peakOf(audio.pcm) < SILENCE_PEAK) {
-      // Nothing audible in the window, so skip the inference and the hitch it costs.
+    const peak = peakOf(audio.pcm);
+    if (peak < SILENCE_PEAK) {
+      // Nothing to recover the word from, so do not spend an inference - and do not let
+      // Whisper answer anyway, because on silence it invents words. Recorded rather
+      // than swallowed, so a cue that kept its guess can be told apart from one that
+      // was never tried.
+      state.lastAsr = {
+        where: 'skipped', reason: 'silent window', peak: +peak.toFixed(5),
+        secs: +(audio.pcm.length / 16000).toFixed(2), audioStart: +audio.startSec.toFixed(2),
+      };
       for (const job of jobs) job.done = true;
       return false;
     }
