@@ -47,6 +47,10 @@ file can claim. Everything else was verified by a scripted Chromium driving a re
 Tampermonkey — thorough about the things it thought to measure, and blind to the
 things it did not. A human just watches the video.
 
+## Screenshots
+
+<img width="1505" alt="image" src="https://github.com/user-attachments/assets/256df4f3-ba2e-4220-8f6f-599b30d45dc2" />
+
 ## Notes
 
 How it works, what was measured, and everything that broke on the way:
